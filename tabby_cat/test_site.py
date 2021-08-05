@@ -60,7 +60,6 @@ def main(where, demand, additional_streets):
     # dl.download_data_openaddress(where)
 
     streets_df = dl.streets_df
-    print(dl.streets_df.head())
 
     logging.info(f"Running on {demand}")
 
