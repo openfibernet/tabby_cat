@@ -383,7 +383,7 @@ class Processor():
         self.g.add_edges_from(self.edges)
         # 
         # largest_cc = max(nx.connected_components(self.g), key=len)
-        largest_cc = nx.connected_components(self.g)
+        largest_cc = self.g
 
         if not rerun:
             self.convert_ids = {n: i for i, n in enumerate(largest_cc)}

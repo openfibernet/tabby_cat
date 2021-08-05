@@ -48,32 +48,27 @@ def main(where, demand, additional_streets):
         dl.download_data_openaddress(where)
         demand = dl.address_df
 
+    bbox = tuple(demand.total_bounds)
+    print(demand.total_bounds, bbox)
+    
     if additional_streets:
         additional_streets = gpd.read_file(additional_streets)
-
-    logging.info("Started DataLoader: geofabrik")
-    dl.download_data_geofabrik(where)
-    logging.info("Reading street data")
-    print(demand.total_bounds)
-    bbox = tuple(demand.total_bounds)
-    dl.read_street_data(where, bounds=bbox)
-    # dl.download_data_openaddress(where)
-
-    streets_df = dl.streets_df
+    else:
+        logging.info("Started DataLoader: geofabrik")
+        dl.download_data_geofabrik(where)
+        logging.info("Reading street data")
+        dl.read_street_data(where, bounds=bbox)
 
     logging.info(f"Running on {demand}")
 
     # where is this case is just a string used to name files
     pr = Processor(where)
 
-    # filter demand by some predicate
-    # demand = demand
-
-    pr.snap_points_to_line(dl.streets_df, demand)
-
     if additional_streets:
         logging.info("Snapping addresses to streets")
         pr.snap_points_to_line(additional_streets, demand)
+    else:
+        pr.snap_points_to_line(dl.streets_df, demand)
     
     logging.info("Converting GIS to graph")
     pr.geom_to_graph(
