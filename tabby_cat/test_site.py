@@ -51,7 +51,7 @@ def main(where, demand, additional_streets):
     bbox = tuple(demand.total_bounds)
     print(demand.total_bounds, bbox)
     
-    if additional_streets:
+    if additional_streets is not None:
         additional_streets = gpd.read_file(additional_streets)
     else:
         logging.info("Started DataLoader: geofabrik")
@@ -64,7 +64,7 @@ def main(where, demand, additional_streets):
     # where is this case is just a string used to name files
     pr = Processor(where)
 
-    if additional_streets:
+    if additional_streets is not None:
         logging.info("Snapping addresses to streets")
         pr.snap_points_to_line(additional_streets, demand)
     else:
