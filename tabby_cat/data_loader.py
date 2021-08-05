@@ -1,6 +1,7 @@
 """
 The place where the data comes from!
 """
+import logging
 import os
 import zipfile
 import time
@@ -10,6 +11,8 @@ from bs4 import BeautifulSoup
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Point
+
+logging.basicConfig(level=logging.INFO)
 
 class DataLoader():
     """
@@ -89,7 +92,8 @@ class DataLoader():
         pass
 
     def download_data_geofabrik(self, region, url_location=None, index=0):
-        if not os.path.isdir(f"{region}_{index}"):
+        region_id = f"{region}_{index}"
+        if not os.path.isdir(region_id):
             location = region.lower().replace(" ", "-")
             if url_location is not None:
                 location = url_location
@@ -98,14 +102,15 @@ class DataLoader():
                     self.download_data_geofabrik(region, cal, i)
                 return region
             full_url = f"{self.geofabrik_url}{location}{self.geofabrik_ending_url_string}"
-            if not os.path.exists(f"{region}_{index}.zip"):
+            logging.info(f"downloading: {full_url}")
+            if not os.path.exists(f"{region_id}.zip"):
                 page = requests.get(full_url, stream=True)
-                with open(f"{region}_{index}.zip", "wb") as fd:
+                with open(f"{region_id}.zip", "wb") as fd:
                     for chunk in page.iter_content(chunk_size=128):
                         fd.write(chunk)
 
-            with zipfile.ZipFile(f"{region}_{index}.zip", 'r') as zip_ref:
-                zip_ref.extractall(f"{region}_{index}")
+            with zipfile.ZipFile(f"{region_id}.zip", 'r') as zip_ref:
+                zip_ref.extractall(f"{region_id}")
         
         return region
 
@@ -132,6 +137,7 @@ class DataLoader():
             what_region_url = f"us{self.known_regions[region]}"
             link = l.attrs.get("href")
             if "".join(link.split('/')[-3:][:2]) == what_region_url:
+                logging.info(f"open street data - {link}")
                 if link[-3:] == "zip":
                     data = requests.get(link, stream=True)
                     full_file_name = f"./{region}/{self.known_regions[region]}_{zips}.zip"
@@ -179,19 +185,13 @@ class DataLoader():
     def read_csv(self, file_name):
         return pd.read_csv(file_name)
 
-    def read_shp(self, file_name):
-        return gpd.read_file(file_name)
-
-    def read_geojson(self, file_name):
-        return gpd.read_file(file_name)
-
-    def read_street_data(self, region):
+    def read_street_data(self, region, bounds):
         if region == 'California':
-            streets_1 = self.read_shp(f"./{region}_0/{self.street_file_name}")
-            streets_2 = self.read_shp(f"./{region}_1/{self.street_file_name}")
+            streets_1 = gpd.read_file(f"./{region}_0/{self.street_file_name}")
+            streets_2 = gpd.read_file(f"./{region}_1/{self.street_file_name}")
             streets = streets_1.append(streets_2)
         else:
-            streets = self.read_shp(f"./{region}_0/{self.street_file_name}")
+            streets = gpd.read_file(f"./{region}_0/{self.street_file_name}", bbox=bounds)
         self.streets_df = streets[streets['fclass'].isin([
             "residential",
             "primary",

@@ -19,9 +19,8 @@ from pyproj import Proj, transform
 from scipy.spatial import cKDTree
 import h3
 
-
 class Processor():
-    def __init__(self, where):
+    def __init__(self, where, geo_file_type="shp"):
         self.where = where
         self.snap_lines = None
         self.all_lines = None
@@ -37,12 +36,13 @@ class Processor():
         self.look_up = {}
         self.edges = OrderedDict()
         self.index = 0
+        self.geo_file_type = geo_file_type
 
     def _parallelize(self, points, lines):
         """
         Concept taken from here: https://swanlund.space/parallelizing-python
         """
-        cpus = 4 # mp.cpu_count()
+        cpus = mp.cpu_count()
         
         intersection_chunks = np.array_split(points, cpus)
         
@@ -103,7 +103,7 @@ class Processor():
         Returns a numpy (n,2) array.
         """
 
-        fx, fy = pyproj.transform(self.inProj, self.outProj, coordinates[:,0], coordinates[:,1])
+        fx, fy = transform(self.inProj, self.outProj, coordinates[:,0], coordinates[:,1])
         # Re-create (n,2) coordinates
         return np.dstack([fx, fy])[0]
 
@@ -111,6 +111,9 @@ class Processor():
         """
         Taken from here: https://medium.com/@brendan_ward/how-to-leverage-geopandas-for-faster-snapping-of-points-to-lines-6113c94e59aa
         """
+        if lines is None or points is None:
+            raise AssertionError("lines and points arguments cannot be None")
+
         # this creates and also provides us access to the spatial index
         if os.path.isfile(f'{self.where}/output/edge_to_geom.pickle'):
             self.load_intermediate()
@@ -143,19 +146,22 @@ class Processor():
         updated_points.dropna(subset=["geometry"]).geometry.apply(lambda x: self.get_demand_nodes(x))
         points.dropna(subset=["geometry"]).geometry.apply(lambda x: self.get_demand_nodes(x))
         self.snap_lines = closest.apply(lambda x: LineString([x.point.coords[0], x.snapped.coords[0]]), axis=1)
+
+        print(self.snap_lines)
+
         self.snap_lines = pd.DataFrame({"geom": self.snap_lines}, index=[i for i in range(len(self.snap_lines))])
         self.snap_lines = gpd.GeoDataFrame(self.snap_lines, geometry="geom", crs="epsg:3857")
         self.snap_lines = self.snap_lines.dropna()
         self.snap_lines['length'] = self.snap_lines.apply(lambda x: x.geom.length, axis=1)
         if write:
             if not os.path.isdir(f"{self.where}/output"):
-                os.mkdir(f"{self.where}/output")
-            updated_points.to_file(f"{self.where}/output/updated.shp")
+                os.makedirs(f"{self.where}/output", exist_ok=True)
+            updated_points.to_file(f"{self.where}/output/updated.{self.geo_file_type}")
             snap_gdf = self.snap_lines.to_crs('epsg:4326')
             snap_gdf['lat'] = snap_gdf.geometry.apply(lambda x: x.coords[0][0])
             snap_gdf['lon'] = snap_gdf.geometry.apply(lambda x: x.coords[0][1])
             snap_gdf[["lat", "lon", "length"]].to_csv(f"{self.where}/output/connections.csv")
-            snap_gdf.to_file(f"{self.where}/output/test_lines.shp")
+            snap_gdf.to_file(f"{self.where}/output/test_lines.{self.geo_file_type}")
 
     def get_demand_nodes(self, geometry):
         coords = geometry.coords[0]
@@ -363,6 +369,7 @@ class Processor():
             self.nodes_to_connect = set(
                 self.look_up[k] for k, v in self.demand_nodes.items() if v and self.g.degree(self.look_up[k]) == 1)
             nodes_to_connect = copy.copy(self.nodes_to_connect)
+
         self.add_inter_demand_connections(nearest_cost=nearest_cost)
         g_node_conn = self.add_graph_inter_demand_connections(
             self.g,
@@ -374,7 +381,9 @@ class Processor():
         self.edges = {**self.edges, **g_node_conn}
         self.g = nx.Graph()
         self.g.add_edges_from(self.edges)
-        largest_cc = max(nx.connected_components(self.g), key=len)
+        # 
+        # largest_cc = max(nx.connected_components(self.g), key=len)
+        largest_cc = nx.connected_components(self.g)
 
         if not rerun:
             self.convert_ids = {n: i for i, n in enumerate(largest_cc)}

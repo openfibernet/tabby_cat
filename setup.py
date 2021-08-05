@@ -36,7 +36,7 @@ setuptools.setup(
         "networkx==2.4",
         "numpy==1.18.1",
         "pandas==1.0.3",
-        "pcst-fast==1.0.7",
+        "pcst_fast==1.0.7",
         "pybind11==2.5.0",
         "pycparser==2.20",
         "pyOpenSSL==19.1.0",
